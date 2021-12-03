@@ -203,12 +203,12 @@ internal class LocalEchoEventFactory @Inject constructor(
                 ))
     }
 
-    fun createMediaEvent(roomId: String, attachment: ContentAttachmentData): Event {
+    fun createMediaEvent(roomId: String, attachment: ContentAttachmentData, replyEventId: String?): Event {
         return when (attachment.type) {
-            ContentAttachmentData.Type.IMAGE         -> createImageEvent(roomId, attachment)
+            ContentAttachmentData.Type.IMAGE         -> createImageEvent(roomId, attachment, replyEventId)
             ContentAttachmentData.Type.VIDEO         -> createVideoEvent(roomId, attachment)
-            ContentAttachmentData.Type.AUDIO         -> createAudioEvent(roomId, attachment, isVoiceMessage = false)
-            ContentAttachmentData.Type.VOICE_MESSAGE -> createAudioEvent(roomId, attachment, isVoiceMessage = true)
+            ContentAttachmentData.Type.AUDIO         -> createAudioEvent(roomId, attachment, isVoiceMessage = false, replyEventId)
+            ContentAttachmentData.Type.VOICE_MESSAGE -> createAudioEvent(roomId, attachment, isVoiceMessage = true, replyEventId)
             ContentAttachmentData.Type.FILE          -> createFileEvent(roomId, attachment)
         }
     }
@@ -232,7 +232,7 @@ internal class LocalEchoEventFactory @Inject constructor(
                 unsignedData = UnsignedData(age = null, transactionId = localId))
     }
 
-    private fun createImageEvent(roomId: String, attachment: ContentAttachmentData): Event {
+    private fun createImageEvent(roomId: String, attachment: ContentAttachmentData, replyEventId: String?): Event {
         var width = attachment.width
         var height = attachment.height
 
@@ -256,7 +256,9 @@ internal class LocalEchoEventFactory @Inject constructor(
                         height = height?.toInt() ?: 0,
                         size = attachment.size
                 ),
-                url = attachment.queryUri.toString()
+                url = attachment.queryUri.toString(),
+                relatesTo = RelationDefaultContent(null, null, ReplyToContent(replyEventId))
+
         )
         return createMessageEvent(roomId, content)
     }
@@ -297,7 +299,7 @@ internal class LocalEchoEventFactory @Inject constructor(
         return createMessageEvent(roomId, content)
     }
 
-    private fun createAudioEvent(roomId: String, attachment: ContentAttachmentData, isVoiceMessage: Boolean): Event {
+    private fun createAudioEvent(roomId: String, attachment: ContentAttachmentData, isVoiceMessage: Boolean, replyEventId: String?): Event {
         val content = MessageAudioContent(
                 msgType = MessageType.MSGTYPE_AUDIO,
                 body = attachment.name ?: "audio",
@@ -311,7 +313,9 @@ internal class LocalEchoEventFactory @Inject constructor(
                         duration = attachment.duration?.toInt(),
                         waveform = waveformSanitizer.sanitize(attachment.waveform)
                 ),
-                voiceMessageIndicator = if (!isVoiceMessage) null else emptyMap()
+                voiceMessageIndicator = if (!isVoiceMessage) null else emptyMap(),
+                relatesTo = RelationDefaultContent(null, null, ReplyToContent(replyEventId))
+
         )
         return createMessageEvent(roomId, content)
     }

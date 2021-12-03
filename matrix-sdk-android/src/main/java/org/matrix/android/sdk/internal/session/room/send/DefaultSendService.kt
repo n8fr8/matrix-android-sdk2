@@ -237,12 +237,13 @@ internal class DefaultSendService @AssistedInject constructor(
                             compressBeforeSending: Boolean,
                             roomIds: Set<String>): Cancelable {
         return attachments.mapTo(CancelableBag()) {
-            sendMedia(it, compressBeforeSending, roomIds)
+            sendMedia(it, compressBeforeSending, null, roomIds)
         }
     }
 
     override fun sendMedia(attachment: ContentAttachmentData,
                            compressBeforeSending: Boolean,
+                           replyEventId: String?,
                            roomIds: Set<String>): Cancelable {
         // Create an event with the media file path
         // Ensure current roomId is included in the set
@@ -250,7 +251,7 @@ internal class DefaultSendService @AssistedInject constructor(
 
         // Create local echo for each room
         val allLocalEchoes = allRoomIds.map {
-            localEchoEventFactory.createMediaEvent(it, attachment).also { event ->
+            localEchoEventFactory.createMediaEvent(it, attachment, replyEventId).also { event ->
                 createLocalEcho(event)
             }
         }
