@@ -206,7 +206,7 @@ project.afterEvaluate {
             release(MavenPublication) {
                 groupId 'matrix'
                 artifactId 'sdk2'
-                version '1.3.9.1'
+                version '1.3.14'
                 from components.release
             }
         }
