@@ -12,7 +12,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath "io.realm:realm-gradle-plugin:10.8.1"
+        classpath "io.realm:realm-gradle-plugin:10.9.0"
     }
 }
 
@@ -151,8 +151,8 @@ dependencies {
     implementation libs.arrow.core
     implementation libs.arrow.instances
 
-    // olm lib is now hosted by jitpack: https://jitpack.io/#org.matrix.gitlab.matrix-org/olm
-    implementation 'org.matrix.gitlab.matrix-org:olm:3.2.6'
+    // olm lib is now hosted in MavenCentral
+    implementation 'org.matrix.android:olm-sdk:3.2.10'
 
     // DI
     implementation libs.dagger.dagger
@@ -169,10 +169,10 @@ dependencies {
     implementation libs.apache.commonsImaging
 
     // Phone number https://github.com/google/libphonenumber
-    implementation 'com.googlecode.libphonenumber:libphonenumber:8.12.38'
+    implementation 'com.googlecode.libphonenumber:libphonenumber:8.12.40'
 
     testImplementation libs.tests.junit
-    testImplementation 'org.robolectric:robolectric:4.7.2'
+    testImplementation 'org.robolectric:robolectric:4.7.3'
     //testImplementation 'org.robolectric:shadows-support-v4:3.0'
     // Note: version sticks to 1.9.2 due to https://github.com/mockk/mockk/issues/281
     testImplementation libs.mockk.mockk

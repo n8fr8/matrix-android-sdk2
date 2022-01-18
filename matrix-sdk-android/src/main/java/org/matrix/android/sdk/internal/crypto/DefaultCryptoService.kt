@@ -67,6 +67,7 @@ import org.matrix.android.sdk.internal.crypto.model.CryptoDeviceInfo
 import org.matrix.android.sdk.internal.crypto.model.ImportRoomKeysResult
 import org.matrix.android.sdk.internal.crypto.model.MXDeviceInfo
 import org.matrix.android.sdk.internal.crypto.model.MXEncryptEventContentResult
+import org.matrix.android.sdk.internal.crypto.model.MXKey.Companion.KEY_SIGNED_CURVE_25519_TYPE
 import org.matrix.android.sdk.internal.crypto.model.MXUsersDevicesMap
 import org.matrix.android.sdk.internal.crypto.model.event.EncryptedEventContent
 import org.matrix.android.sdk.internal.crypto.model.event.RoomKeyContent
@@ -89,6 +90,7 @@ import org.matrix.android.sdk.internal.di.MoshiProvider
 import org.matrix.android.sdk.internal.di.UserId
 import org.matrix.android.sdk.internal.extensions.foldToCallback
 import org.matrix.android.sdk.internal.session.SessionScope
+import org.matrix.android.sdk.internal.session.StreamEventsManager
 import org.matrix.android.sdk.internal.session.room.membership.LoadRoomMembersTask
 import org.matrix.android.sdk.internal.task.TaskExecutor
 import org.matrix.android.sdk.internal.task.TaskThread
@@ -167,14 +169,15 @@ internal class DefaultCryptoService @Inject constructor(
         private val coroutineDispatchers: MatrixCoroutineDispatchers,
         private val taskExecutor: TaskExecutor,
         private val cryptoCoroutineScope: CoroutineScope,
-        private val eventDecryptor: EventDecryptor
+        private val eventDecryptor: EventDecryptor,
+        private val liveEventManager: Lazy<StreamEventsManager>
 ) : CryptoService {
 
     private val isStarting = AtomicBoolean(false)
     private val isStarted = AtomicBoolean(false)
 
     fun onStateEvent(roomId: String, event: Event) {
-        when (event.getClearType()) {
+        when (event.type) {
             EventType.STATE_ROOM_ENCRYPTION         -> onRoomEncryptionEvent(roomId, event)
             EventType.STATE_ROOM_MEMBER             -> onRoomMembershipEvent(roomId, event)
             EventType.STATE_ROOM_HISTORY_VISIBILITY -> onRoomHistoryVisibilityEvent(roomId, event)
@@ -182,10 +185,13 @@ internal class DefaultCryptoService @Inject constructor(
     }
 
     fun onLiveEvent(roomId: String, event: Event) {
-        when (event.getClearType()) {
-            EventType.STATE_ROOM_ENCRYPTION         -> onRoomEncryptionEvent(roomId, event)
-            EventType.STATE_ROOM_MEMBER             -> onRoomMembershipEvent(roomId, event)
-            EventType.STATE_ROOM_HISTORY_VISIBILITY -> onRoomHistoryVisibilityEvent(roomId, event)
+        // handle state events
+        if (event.isStateEvent()) {
+            when (event.type) {
+                EventType.STATE_ROOM_ENCRYPTION         -> onRoomEncryptionEvent(roomId, event)
+                EventType.STATE_ROOM_MEMBER             -> onRoomMembershipEvent(roomId, event)
+                EventType.STATE_ROOM_HISTORY_VISIBILITY -> onRoomHistoryVisibilityEvent(roomId, event)
+            }
         }
     }
 
@@ -428,9 +434,27 @@ internal class DefaultCryptoService @Inject constructor(
                     val currentCount = syncResponse.deviceOneTimeKeysCount.signedCurve25519 ?: 0
                     oneTimeKeysUploader.updateOneTimeKeyCount(currentCount)
                 }
-                if (isStarted()) {
+                // There is a limit of to_device events returned per sync.
+                // If we are in a case of such limited to_device sync we can't try to generate/upload
+                // new otk now, because there might be some pending olm pre-key to_device messages that would fail if we rotate
+                // the old otk too early. In this case we want to wait for the pending to_device before doing anything
+                // As per spec:
+                // If there is a large queue of send-to-device messages, the server should limit the number sent in each /sync response.
+                // 100 messages is recommended as a reasonable limit.
+                // The limit is not part of the spec, so it's probably safer to handle that when there are no more to_device ( so we are sure
+                // that there are no pending to_device
+                val toDevices = syncResponse.toDevice?.events.orEmpty()
+                if (isStarted() && toDevices.isEmpty()) {
                     // Make sure we process to-device messages before generating new one-time-keys #2782
                     deviceListManager.refreshOutdatedDeviceLists()
+                    // The presence of device_unused_fallback_key_types indicates that the server supports fallback keys.
+                    // If there's no unused signed_curve25519 fallback key we need a new one.
+                    if (syncResponse.deviceUnusedFallbackKeyTypes != null &&
+                            // Generate a fallback key only if the server does not already have an unused fallback key.
+                            !syncResponse.deviceUnusedFallbackKeyTypes.contains(KEY_SIGNED_CURVE_25519_TYPE)) {
+                        oneTimeKeysUploader.needsNewFallback()
+                    }
+
                     oneTimeKeysUploader.maybeUploadOneTimeKeys()
                     incomingGossipingRequestManager.processReceivedGossipingRequests()
                 }
@@ -554,26 +578,31 @@ internal class DefaultCryptoService @Inject constructor(
         // (for now at least. Maybe we should alert the user somehow?)
         val existingAlgorithm = cryptoStore.getRoomAlgorithm(roomId)
 
-        if (!existingAlgorithm.isNullOrEmpty() && existingAlgorithm != algorithm) {
-            Timber.tag(loggerTag.value).e("setEncryptionInRoom() : Ignoring m.room.encryption event which requests a change of config in $roomId")
+        if (existingAlgorithm == algorithm && roomEncryptorsStore.get(roomId) != null) {
+            // ignore
+            Timber.tag(loggerTag.value).e("setEncryptionInRoom() : Ignoring m.room.encryption for same alg ($algorithm) in  $roomId")
             return false
         }
 
         val encryptingClass = MXCryptoAlgorithms.hasEncryptorClassForAlgorithm(algorithm)
+
+        // Always store even if not supported
+        cryptoStore.storeRoomAlgorithm(roomId, algorithm)
 
         if (!encryptingClass) {
             Timber.tag(loggerTag.value).e("setEncryptionInRoom() : Unable to encrypt room $roomId with $algorithm")
             return false
         }
 
-        cryptoStore.storeRoomAlgorithm(roomId, algorithm!!)
-
-        val alg: IMXEncrypting = when (algorithm) {
+        val alg: IMXEncrypting? = when (algorithm) {
             MXCRYPTO_ALGORITHM_MEGOLM -> megolmEncryptionFactory.create(roomId)
-            else                      -> olmEncryptionFactory.create(roomId)
+            MXCRYPTO_ALGORITHM_OLM    -> olmEncryptionFactory.create(roomId)
+            else                      -> null
         }
 
-        roomEncryptorsStore.put(roomId, alg)
+        if (alg != null) {
+            roomEncryptorsStore.put(roomId, alg)
+        }
 
         // if encryption was not previously enabled in this room, we will have been
         // ignoring new device events for these users so far. We may well have
@@ -763,6 +792,7 @@ internal class DefaultCryptoService @Inject constructor(
                 }
             }
         }
+        liveEventManager.get().dispatchOnLiveToDevice(event)
     }
 
     /**
@@ -905,6 +935,7 @@ internal class DefaultCryptoService @Inject constructor(
     }
 
     private fun onRoomHistoryVisibilityEvent(roomId: String, event: Event) {
+        if (!event.isStateEvent()) return
         val eventContent = event.content.toModel<RoomHistoryVisibilityContent>()
         eventContent?.historyVisibility?.let {
             cryptoStore.setShouldEncryptForInvitedMembers(roomId, it != RoomHistoryVisibility.JOINED)
@@ -928,7 +959,7 @@ internal class DefaultCryptoService @Inject constructor(
                 signatures = objectSigner.signObject(canonicalJson)
         )
 
-        val uploadDeviceKeysParams = UploadKeysTask.Params(rest, null)
+        val uploadDeviceKeysParams = UploadKeysTask.Params(rest, null, null)
         uploadKeysTask.execute(uploadDeviceKeysParams)
 
         cryptoStore.setDeviceKeysUploaded(true)

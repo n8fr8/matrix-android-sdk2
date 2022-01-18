@@ -1,5 +1,32 @@
 Please also refer to the Changelog of Element Android: https://github.com/vector-im/element-android/blob/main/CHANGES.md
 
+Changes in Matrix-SDK 1.3.14 (2022-01-12)
+===================================================
+
+Imported from Element 1.3.14. (https://github.com/vector-im/element-android/releases/tag/v1.3.14)
+
+Changes in Matrix-SDK 1.3.13 (2022-01-11)
+===================================================
+
+Imported from Element 1.3.13. (https://github.com/vector-im/element-android/releases/tag/v1.3.13)
+
+SDK API changes ⚠️
+------------------
+ - Introduce method onStateUpdated on Timeline.Callback ([#4405](https://github.com/vector-im/element-android/issues/4405))
+ - Support tagged events in Room Account Data (MSC2437) ([#4753](https://github.com/vector-im/element-android/issues/4753))
+
+Changes in Matrix-SDK 1.3.10 (2021-12-14)
+===================================================
+
+Imported from Element 1.3.10. (https://github.com/vector-im/element-android/releases/tag/v1.3.10)
+
+SDK API changes ⚠️
+------------------
+
+- New API TermsService.getHomeserverTerms() to get the terms of service from a homeserver
+- API SendService.sendOptionsReply() is replaced by SendService.voteToPoll()
+- New API SendService.endPoll()
+
 Changes in Matrix-SDK 1.3.9 (2021-12-01)
 ===================================================
 

@@ -57,6 +57,15 @@ interface SendService {
     fun sendFormattedTextMessage(text: String, formattedText: String, msgType: String = MessageType.MSGTYPE_TEXT): Cancelable
 
     /**
+     * Method to quote an events content.
+     * @param quotedEvent The event to which we will quote it's content.
+     * @param text the text message to send
+     * @param autoMarkdown If true, the SDK will generate a formatted HTML message from the body text if markdown syntax is present
+     * @return a [Cancelable]
+     */
+    fun sendQuotedTextMessage(quotedEvent: TimelineEvent, text: String, autoMarkdown: Boolean): Cancelable
+
+    /**
      * Method to send a media asynchronously.
      * @param attachment the media to send
      * @param compressBeforeSending set to true to compress images before sending them
@@ -93,11 +102,17 @@ interface SendService {
     /**
      * Method to send a poll response.
      * @param pollEventId the poll currently replied to
-     * @param optionIndex The reply index
-     * @param optionValue The option value (for compatibility)
+     * @param answerId The id of the answer
      * @return a [Cancelable]
      */
-    fun sendOptionsReply(pollEventId: String, optionIndex: Int, optionValue: String): Cancelable
+    fun voteToPoll(pollEventId: String, answerId: String): Cancelable
+
+    /**
+     * End a poll in the room.
+     * @param pollEventId event id of the poll
+     * @return a [Cancelable]
+     */
+    fun endPoll(pollEventId: String): Cancelable
 
     /**
      * Redact (delete) the given event.

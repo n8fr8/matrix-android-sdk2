@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Matrix.org Foundation C.I.C.
+ * Copyright (c) 2021 The Matrix.org Foundation C.I.C.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.commonmark.ext.maths
 
-package org.matrix.android.sdk.api.session.room.model.message
+import org.commonmark.node.CustomBlock
 
-import com.squareup.moshi.Json
-import com.squareup.moshi.JsonClass
-
-/**
- * Ref: https://github.com/matrix-org/matrix-doc/pull/2192
- */
-@JsonClass(generateAdapter = true)
-data class OptionItem(
-        @Json(name = "label") val label: String?,
-        @Json(name = "value") val value: String?
-)
+class DisplayMaths(private val delimiter: DisplayDelimiter) : CustomBlock() {
+    enum class DisplayDelimiter {
+        DOUBLE_DOLLAR,
+        SQUARE_BRACKET_ESCAPED
+    }
+}
