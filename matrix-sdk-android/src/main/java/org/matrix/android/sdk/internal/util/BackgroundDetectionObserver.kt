@@ -49,8 +49,8 @@ internal class DefaultBackgroundDetectionObserver : BackgroundDetectionObserver 
 
     override fun onStart(owner: LifecycleOwner) {
     //    Timber.v("App returning to foreground…")
-     //   isInBackground = false
-      //  listeners.forEach { it.onMoveToForeground() }
+          isInBackground = false
+          listeners.forEach { it.onMoveToForeground() }
     }
 
     override fun onStop(owner: LifecycleOwner) {
